@@ -66,6 +66,11 @@ namespace EnergyMonitoringSystem.Service.BackgroundServices
         {
             using (TcpClient client = new TcpClient(device.IpAddress, device.Port))
             {
+                var connectTask = client.ConnectAsync(device.IpAddress, device.Port);
+                if (await Task.WhenAny(connectTask, Task.Delay(3000)) != connectTask)
+                {
+                    throw new TimeoutException("Cihaza bağlanılamadı (Timeout).");
+                }
                 var factory = new ModbusFactory();
                 // NModbus 3.x sürümü için CreateMaster kullanılır
                 IModbusMaster master = factory.CreateMaster(client);

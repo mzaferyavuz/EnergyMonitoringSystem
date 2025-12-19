@@ -1,57 +1,134 @@
 ﻿using EnergyMonitoringSystem.Data;
 using EnergyMonitoringSystem.Service.Auth;
+using EnergyMonitoringSystem.Core.Entities; // ApplicationUser için gerekli
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models; // Swagger ayarları için
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Connection String'i al
+// 1. Veritabanı Bağlantısı
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-
-// 2. DbContext'i Kaydet
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString));
 
-// 3. Identity Sistemini Kaydet (Maddeler 11-15 için)
-builder.Services.AddIdentity<IdentityUser, IdentityRole>()
+// 2. Identity Kurulumu (Kullanıcı Yönetimi)
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
 
-builder.Services.AddControllers();
-
-// Add services to the container.
-
-builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
-
-var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
-
-app.UseHttpsRedirection();
-
-app.UseAuthorization();
-
-app.MapControllers();
-
-app.Run();
-
-
-builder.Services.AddIdentity<IdentityUser, IdentityRole>()
-    .AddEntityFrameworkStores<AppDbContext>()
-    .AddDefaultTokenProviders();
+// 3. JWT Authentication Ayarları (Token Doğrulama)
+var tokenKey = builder.Configuration["TokenKey"]
+    ?? throw new Exception("TokenKey appsettings.json dosyasında bulunamadı!");
 
 builder.Services.AddAuthentication(options => {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 }).AddJwtBearer(options => {
-    // JWT ayarları (Key, Issuer vb.) buraya gelecek
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(tokenKey)),
+        ValidateIssuer = false, // Geliştirme aşamasında kapalı
+        ValidateAudience = false
+    };
 });
 
+// 4. Servislerin Kaydı (Dependency Injection)
 builder.Services.AddScoped<ITokenService, TokenService>();
+// Eğer BillingService ve EmissionService dosyalarını oluşturduysan onları da buraya eklemelisin:
+// builder.Services.AddScoped<BillingService>();
+builder.Services.AddScoped<EnergyMonitoringSystem.Service.Emission.EmissionService>();
+builder.Services.AddScoped<EnergyMonitoringSystem.Service.Billing.BillingService>();
+
+// 5. Arka Plan Servisi (Worker)
+// ModbusCollectorWorker servisini kaydet
+builder.Services.AddHostedService<EnergyMonitoringSystem.Service.BackgroundServices.ModbusCollectorWorker>();
+
+builder.Services.AddControllers();
+
+// 6. Swagger Ayarları (Kilit Butonu Eklemek İçin)
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    // Tam yol belirterek karışıklığı önlüyoruz: Microsoft.OpenApi.Models.OpenApiInfo
+    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "Energy Monitoring API",
+        Version = "v1"
+    });
+
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Örnek: \"Bearer {token}\"",
+        Name = "Authorization",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+
+    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement()
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                },
+                Scheme = "oauth2",
+                Name = "Bearer",
+                In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+            },
+            new List<string>()
+        }
+    });
+});
+
+// 7. CORS (Frontend Erişimi İçin)
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll",
+        b => b.AllowAnyMethod().AllowAnyHeader().AllowAnyOrigin());
+});
+
+var app = builder.Build();
+
+// HTTP Request Pipeline
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseCors("AllowAll"); // CORS'u aktif et
+
+app.UseHttpsRedirection();
+
+app.UseAuthentication(); // Önce kimlik doğrulama
+app.UseAuthorization();  // Sonra yetkilendirme
+
+app.MapControllers();
+
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+        // Seed işlemini başlat (await kullanmak için Program.cs task yapısına uygun olmalı veya .Wait() kullanılmalı)
+        await DbInitializer.SeedAdminUser(userManager, roleManager);
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Admin kullanıcısı oluşturulurken hata çıktı.");
+    }
+}
+
+app.Run();
