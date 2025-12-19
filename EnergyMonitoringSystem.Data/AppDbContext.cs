@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using EnergyMonitoringSystem.Core.Constants;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -69,10 +70,10 @@ namespace EnergyMonitoringSystem.Data
             string externalRoleId = Guid.NewGuid().ToString();
 
             modelBuilder.Entity<IdentityRole>().HasData(
-                new IdentityRole { Id = adminRoleId, Name = "Admin", NormalizedName = "ADMIN" },
-                new IdentityRole { Id = standardRoleId, Name = "Standard", NormalizedName = "STANDARD" },
-                new IdentityRole { Id = viewOnlyRoleId, Name = "ViewOnly", NormalizedName = "VIEWONLY" },
-                new IdentityRole { Id = externalRoleId, Name = "External", NormalizedName = "EXTERNAL" }
+new IdentityRole { Id = adminRoleId, Name = RoleConstants.Admin, NormalizedName = RoleConstants.Admin.ToUpper() },
+    new IdentityRole { Id = standardRoleId, Name = RoleConstants.Standard, NormalizedName = RoleConstants.Standard.ToUpper() },
+    new IdentityRole { Id = viewOnlyRoleId, Name = RoleConstants.ViewOnly, NormalizedName = RoleConstants.ViewOnly.ToUpper() },
+    new IdentityRole { Id = externalRoleId, Name = RoleConstants.External, NormalizedName = RoleConstants.External.ToUpper() }
             );
         }
     }

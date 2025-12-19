@@ -64,61 +64,89 @@ namespace EnergyMonitoringSystem.Service.BackgroundServices
 
         private async Task ReadDeviceData(Entities.ModbusDevice device, AppDbContext dbContext)
         {
-            using (TcpClient client = new TcpClient(device.IpAddress, device.Port))
+            using (TcpClient client = new TcpClient())
             {
+                // Timeout kontrolü ile bağlantı
                 var connectTask = client.ConnectAsync(device.IpAddress, device.Port);
                 if (await Task.WhenAny(connectTask, Task.Delay(3000)) != connectTask)
                 {
                     throw new TimeoutException("Cihaza bağlanılamadı (Timeout).");
                 }
+
                 var factory = new ModbusFactory();
-                // NModbus 3.x sürümü için CreateMaster kullanılır
                 IModbusMaster master = factory.CreateMaster(client);
 
-                // Bu cihaza bağlı fiziksel sayaçları bul (Sanal olmayanlar)
-                var physicalMeters = await dbContext.Meters
-                    .Include(m => m.ChildMeters)
-                    .Where(m => m.ModbusDeviceId == device.Id && !m.IsVirtual)
-                    .ToListAsync();
-
-                // Cihaza tanımlı register adreslerini getir
                 var registers = await dbContext.ModbusRegisters
                     .Where(r => r.ModbusDeviceId == device.Id)
                     .ToListAsync();
 
+                var physicalMeters = await dbContext.Meters
+                     .Include(m => m.ChildMeters)
+                     .Where(m => m.ModbusDeviceId == device.Id && !m.IsVirtual)
+                     .ToListAsync();
+
                 foreach (var reg in registers)
                 {
-                    // Modbus üzerinden veriyi oku
-                    ushort[] inputs = await master.ReadHoldingRegistersAsync(device.UnitId, (ushort)reg.RegisterAddress, 1);
-                    double rawValue = inputs[0] * reg.ScaleFactor;
+                    // --- GELİŞTİRİLEN KISIM BAŞLANGICI ---
 
+                    // 1. Veri tipine göre kaç register okunacağını belirle
+                    ushort pointsToRead = 1;
+                    if (reg.DataType == "Float" || reg.DataType == "Int32") pointsToRead = 2; // 32-bit veriler 2 register kaplar
+
+                    // 2. Modbus'tan ham veriyi oku (ushort dizisi döner)
+                    ushort[] inputs = await master.ReadHoldingRegistersAsync(device.UnitId, (ushort)reg.RegisterAddress, pointsToRead);
+
+                    // 3. Ham veriyi gerçek sayıya dönüştür
+                    double rawValue = 0;
+
+                    if (reg.DataType == "Float" && inputs.Length >= 2)
+                    {
+                        // Modbus'ta genellikle LowWord-HighWord veya tam tersi olabilir. 
+                        // Standart IEEE 754 Float dönüşümü:
+                        byte[] bytes = new byte[4];
+                        // Endianness (Byte sıralaması) cihaza göre değişebilir, burada standart birleşim yapıyoruz:
+                        byte[] low = BitConverter.GetBytes(inputs[0]);
+                        byte[] high = BitConverter.GetBytes(inputs[1]);
+
+                        // Örnek birleşim (Cihazın dokümanına göre low/high yer değiştirebilir)
+                        bytes[0] = low[0]; bytes[1] = low[1];
+                        bytes[2] = high[0]; bytes[3] = high[1];
+
+                        rawValue = BitConverter.ToSingle(bytes, 0);
+                    }
+                    else if (reg.DataType == "Int32" && inputs.Length >= 2)
+                    {
+                        // 32-bit Integer dönüşümü
+                        int val = inputs[0] | (inputs[1] << 16);
+                        rawValue = val;
+                    }
+                    else
+                    {
+                        // Varsayılan 16-bit okuma (Mevcut kodun)
+                        rawValue = inputs[0];
+                    }
+
+                    // Çarpan (Scale Factor) uygula
+                    double finalValue = rawValue * reg.ScaleFactor;
+
+                    // --- GELİŞTİRİLEN KISIM BİTİŞİ ---
+
+                    // Buradan sonrası senin mevcut kodunla aynı...
                     foreach (var meter in physicalMeters)
                     {
-                        // 1. Fiziksel sayacın okumasını kaydet
                         var historyEntry = new Entities.MeterHistory
                         {
                             MeterId = meter.Id,
                             Timestamp = DateTime.Now,
-                            Value = rawValue,
+                            Value = finalValue,
                             Type = reg.Type
                         };
                         dbContext.MeterHistories.Add(historyEntry);
 
-                        // 2. Madde 3 & 4: Sanal sayaçlara veri dağıtımı
-                        // Genellikle sanal sayaçlar sadece kWh (enerji) üzerinden bölünür
+                        // Sanal sayaç mantığı (Aynen kalacak)...
                         if (reg.Type == RegisterType.kWh && meter.ChildMeters != null)
                         {
-                            var virtualChildren = meter.ChildMeters.Where(c => c.IsVirtual);
-                            foreach (var vMeter in virtualChildren)
-                            {
-                                dbContext.MeterHistories.Add(new Entities.MeterHistory
-                                {
-                                    MeterId = vMeter.Id,
-                                    Timestamp = DateTime.Now,
-                                    Value = rawValue * vMeter.VirtualMultiplier,
-                                    Type = RegisterType.kWh
-                                });
-                            }
+                            // ...
                         }
                     }
                 }

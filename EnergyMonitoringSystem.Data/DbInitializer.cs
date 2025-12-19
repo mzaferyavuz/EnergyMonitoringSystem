@@ -1,5 +1,6 @@
 ﻿using EnergyMonitoringSystem.Core.Entities;
 using Microsoft.AspNetCore.Identity;
+using EnergyMonitoringSystem.Core.Constants;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,13 +14,13 @@ namespace EnergyMonitoringSystem.Data
         public static async Task SeedAdminUser(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager)
         {
             // Admin rolü var mı kontrol et
-            if (!await roleManager.RoleExistsAsync("Admin"))
+            if (!await roleManager.RoleExistsAsync(RoleConstants.Admin))
             {
-                await roleManager.CreateAsync(new IdentityRole("Admin"));
+                await roleManager.CreateAsync(new IdentityRole(RoleConstants.Admin));
             }
             // Diğer rolleri de ekleyebilirsin
-            if (!await roleManager.RoleExistsAsync("Standard")) await roleManager.CreateAsync(new IdentityRole("Standard"));
-            if (!await roleManager.RoleExistsAsync("External")) await roleManager.CreateAsync(new IdentityRole("External"));
+            if (!await roleManager.RoleExistsAsync(RoleConstants.Standard)) await roleManager.CreateAsync(new IdentityRole(RoleConstants.Standard));
+            if (!await roleManager.RoleExistsAsync(RoleConstants.External)) await roleManager.CreateAsync(new IdentityRole(RoleConstants.External));
 
             // Admin kullanıcısı var mı?
             if (await userManager.FindByNameAsync("admin") == null)
@@ -34,7 +35,7 @@ namespace EnergyMonitoringSystem.Data
                 var result = await userManager.CreateAsync(user, "Admin123!"); // Güçlü şifre
                 if (result.Succeeded)
                 {
-                    await userManager.AddToRoleAsync(user, "Admin");
+                    await userManager.AddToRoleAsync(user, RoleConstants.Admin);
                 }
             }
         }

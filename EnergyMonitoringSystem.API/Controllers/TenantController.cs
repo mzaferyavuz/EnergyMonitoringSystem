@@ -3,10 +3,11 @@ using EnergyMonitoringSystem.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using EnergyMonitoringSystem.Core.Constants;
 
 namespace EnergyMonitoringSystem.API.Controllers
 {
-    [Authorize(Roles = "Admin")] // Sadece Admin yönetebilir
+    [Authorize(Roles = RoleConstants.Admin)] // Sadece Admin yönetebilir
     [ApiController]
     [Route("api/[controller]")]
     public class TenantController : ControllerBase

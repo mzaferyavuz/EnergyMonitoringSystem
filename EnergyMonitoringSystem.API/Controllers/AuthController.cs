@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using EnergyMonitoringSystem.Core.Constants;
 
 namespace EnergyMonitoringSystem.API.Controllers
 {
@@ -37,7 +38,7 @@ namespace EnergyMonitoringSystem.API.Controllers
         }
 
         [HttpPost("register")]
-        [Authorize(Roles = "Admin")] // Sadece Admin yeni kullanıcı ekleyebilir
+        [Authorize(Roles = RoleConstants.Admin)] // Sadece Admin yeni kullanıcı ekleyebilir
         public async Task<IActionResult> Register([FromBody] RegisterDto registerDto)
         {
             var user = new ApplicationUser

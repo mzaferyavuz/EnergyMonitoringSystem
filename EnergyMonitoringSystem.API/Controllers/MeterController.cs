@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using EnergyMonitoringSystem.Core.Constants;
 
 namespace EnergyMonitoringSystem.API.Controllers
 {
@@ -25,7 +26,7 @@ namespace EnergyMonitoringSystem.API.Controllers
 
         // Madde 15: External kullanıcıların (Tenant) sadece kendi sayaçlarını görmesi
         [HttpGet("my-meters")]
-        [Authorize(Roles = "External")] // Sadece External rolündekiler girebilir
+        [Authorize(Roles = RoleConstants.External)] // Sadece External rolündekiler girebilir
         public async Task<IActionResult> GetTenantMeters()
         {
             // 1. Giriş yapan kullanıcının ID'sini sistemden al (Token içinden gelir)
@@ -46,7 +47,7 @@ namespace EnergyMonitoringSystem.API.Controllers
 
         // Madde 12: Admin'in tüm sayaçları listelemesi
         [HttpGet("all-meters")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = RoleConstants.Admin)]
         public async Task<IActionResult> GetAllMeters()
         {
             var meters = await _context.Meters.Include(m => m.Tenant).ToListAsync();

@@ -87,6 +87,9 @@ builder.Services.AddSwaggerGen(c =>
             new List<string>()
         }
     });
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    c.IncludeXmlComments(xmlPath);
 });
 
 // 7. CORS (Frontend Erişimi İçin)
@@ -106,6 +109,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("AllowAll"); // CORS'u aktif et
+
+app.UseMiddleware<EnergyMonitoringSystem.API.Middlewares.ExceptionMiddleware>();
 
 app.UseHttpsRedirection();
 

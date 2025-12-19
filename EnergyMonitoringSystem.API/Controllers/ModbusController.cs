@@ -4,12 +4,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using EnergyMonitoringSystem.Core.Constants;
 
 namespace EnergyMonitoringSystem.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "Admin,Standard")] // Admin ve Standard cihaz yönetebilir
+    [Authorize(Roles = RoleConstants.Admin+"," +RoleConstants.Standard)] // Admin ve Standard cihaz yönetebilir
     public class ModbusController : ControllerBase
     {
         private readonly AppDbContext _context;
