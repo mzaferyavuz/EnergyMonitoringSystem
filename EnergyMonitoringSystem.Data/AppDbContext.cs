@@ -86,9 +86,9 @@ new IdentityRole { Id = adminRoleId, Name = RoleConstants.Admin, NormalizedName 
             new MeasurementParameter { Id = 4, Name = "L2 Gerilimi", Key = "Voltage_L2", Unit = "V" },
             new MeasurementParameter { Id = 5, Name = "L3 Gerilimi", Key = "Voltage_L3", Unit = "V" },
             new MeasurementParameter { Id = 6, Name = "Reaktif Güç (Endüktif)", Key = "ReactivePower_Ind", Unit = "kVAr" }, // İstediğin özellik
-            new MeasurementParameter { Id = 3, Name = "L1 Akimi", Key = "Current_L1", Unit = "A" },
-            new MeasurementParameter { Id = 4, Name = "L2 Akimi", Key = "Current_L2", Unit = "A" },
-            new MeasurementParameter { Id = 5, Name = "L3 Akimi", Key = "Current_L3", Unit = "A" }
+            new MeasurementParameter { Id = 7, Name = "L1 Akimi", Key = "Current_L1", Unit = "A" },
+            new MeasurementParameter { Id = 8, Name = "L2 Akimi", Key = "Current_L2", Unit = "A" },
+            new MeasurementParameter { Id = 9, Name = "L3 Akimi", Key = "Current_L3", Unit = "A" }
             );
         }
     }
