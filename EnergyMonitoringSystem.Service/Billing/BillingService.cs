@@ -1,5 +1,4 @@
 ﻿using EnergyMonitoringSystem.Core.Entities;
-using EnergyMonitoringSystem.Core.Enums;
 using EnergyMonitoringSystem.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,29 +19,32 @@ namespace EnergyMonitoringSystem.Service.Billing
             var meter = await _context.Meters.FindAsync(meterId);
             if (meter == null) return 0;
 
-            // 2. Toplam Tüketimi (kWh) hesapla
-            // Not: MeterHistory value 'double' olduğu için 'decimal'e cast ediyoruz (para hesabı hassas olmalı)
+            // 1. "Aktif Enerji" parametresinin ID'sini bul (Key = "ActiveEnergy")
+            // (Performans için bu ID cache'lenebilir ama şimdilik veritabanından soralım)
+            var activeEnergyParam = await _context.MeasurementParameters
+                .FirstOrDefaultAsync(p => p.Key == "ActiveEnergy");
+
+            if (activeEnergyParam == null) return 0; // Sistemde enerji parametresi tanımlı değilse hesap yapamayız
+
+            // 2. Sadece Aktif Enerji verilerini topla
             var totalConsumption = (decimal)await _context.MeterHistories
                 .Where(h => h.MeterId == meterId
-                            && h.Type == RegisterType.kWh
+                            && h.MeasurementParameterId == activeEnergyParam.Id // <--- DEĞİŞİKLİK BURADA
                             && h.Timestamp >= startDate
                             && h.Timestamp <= endDate)
                 .SumAsync(h => h.Value);
 
             if (totalConsumption == 0) return 0;
 
-            // 3. Geçerli Tarifeyi Bulma Mantığı
-            // Öncelik 1: Bu kiracıya özel tanımlanmış tarife var mı?
-            // Öncelik 2: Genel (TenantId = null) tarife var mı?
+            // 3. Tarife Bulma (Aynen Kalıyor)
             var activeTariff = await _context.Tariffs
                 .Where(t => (t.TenantId == meter.TenantId || t.TenantId == null) && t.ValidFrom <= endDate)
-                .OrderByDescending(t => t.TenantId) // Önce Tenant'a özel olanı dene
-                .ThenByDescending(t => t.ValidFrom) // Sonra tarihe göre en güncelini al
+                .OrderByDescending(t => t.TenantId)
+                .ThenByDescending(t => t.ValidFrom)
                 .FirstOrDefaultAsync();
 
             decimal unitPrice = activeTariff?.UnitPrice ?? 0;
 
-            // 4. Sonuç: Tüketim x Birim Fiyat
             return totalConsumption * unitPrice;
         }
     }

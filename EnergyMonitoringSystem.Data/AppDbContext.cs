@@ -25,14 +25,17 @@ namespace EnergyMonitoringSystem.Data
         public DbSet<Tariff> Tariffs { get; set; }
         public DbSet<CarbonFactor> CarbonFactors { get; set; }
 
+        public DbSet<MeasurementParameter> MeasurementParameters { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
             modelBuilder.Entity<ModbusRegister>()
-                .HasOne(r => r.ModbusDevice)
-                .WithMany() // Bir cihazın birçok register ayarı olabilir
-                .HasForeignKey(r => r.ModbusDeviceId);
+                .HasOne(r => r.Meter)
+                .WithMany() // Bir sayacın birçok register'ı olabilir (isterseniz Meter entity'sine ICollection<ModbusRegister> ekleyebilirsiniz)
+                .HasForeignKey(r => r.MeterId)
+                .OnDelete(DeleteBehavior.Cascade); // Sayaç silinirse registerları da silinsin
 
             // 1. Sayaç Hiyerarşisi (Self-Referencing) - Madde 4
             modelBuilder.Entity<Meter>()
@@ -74,6 +77,18 @@ new IdentityRole { Id = adminRoleId, Name = RoleConstants.Admin, NormalizedName 
     new IdentityRole { Id = standardRoleId, Name = RoleConstants.Standard, NormalizedName = RoleConstants.Standard.ToUpper() },
     new IdentityRole { Id = viewOnlyRoleId, Name = RoleConstants.ViewOnly, NormalizedName = RoleConstants.ViewOnly.ToUpper() },
     new IdentityRole { Id = externalRoleId, Name = RoleConstants.External, NormalizedName = RoleConstants.External.ToUpper() }
+            );
+
+            modelBuilder.Entity<MeasurementParameter>().HasData(
+            new MeasurementParameter { Id = 1, Name = "Aktif Enerji (Tüketim)", Key = "ActiveEnergy", Unit = "kWh" },
+            new MeasurementParameter { Id = 2, Name = "Aktif Güç", Key = "ActivePower", Unit = "kW" },
+            new MeasurementParameter { Id = 3, Name = "L1 Gerilimi", Key = "Voltage_L1", Unit = "V" },
+            new MeasurementParameter { Id = 4, Name = "L2 Gerilimi", Key = "Voltage_L2", Unit = "V" },
+            new MeasurementParameter { Id = 5, Name = "L3 Gerilimi", Key = "Voltage_L3", Unit = "V" },
+            new MeasurementParameter { Id = 6, Name = "Reaktif Güç (Endüktif)", Key = "ReactivePower_Ind", Unit = "kVAr" }, // İstediğin özellik
+            new MeasurementParameter { Id = 3, Name = "L1 Akimi", Key = "Current_L1", Unit = "A" },
+            new MeasurementParameter { Id = 4, Name = "L2 Akimi", Key = "Current_L2", Unit = "A" },
+            new MeasurementParameter { Id = 5, Name = "L3 Akimi", Key = "Current_L3", Unit = "A" }
             );
         }
     }

@@ -1,5 +1,4 @@
-﻿using EnergyMonitoringSystem.Core.Enums;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -13,6 +12,7 @@ namespace EnergyMonitoringSystem.Core.Entities
         public int MeterId { get; set; }
         public DateTime Timestamp { get; set; }
         public double Value { get; set; }
-        public RegisterType Type { get; set; }
+        public int MeasurementParameterId { get; set; }
+        public virtual MeasurementParameter MeasurementParameter { get; set; }
     }
 }
