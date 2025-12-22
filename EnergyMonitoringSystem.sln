@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36623.8 d17.14
+VisualStudioVersion = 17.14.36623.8
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnergyMonitoringSystem.API", "EnergyMonitoringSystem.API\EnergyMonitoringSystem.API.csproj", "{1E709525-C1D6-4C60-96AD-FCFEE2C3AF77}"
 EndProject
@@ -10,6 +10,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnergyMonitoringSystem.Data", "EnergyMonitoringSystem.Data\EnergyMonitoringSystem.Data.csproj", "{D5CF91D3-C732-45C8-885C-3BA18DB0282F}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnergyMonitoringSystem.Service", "EnergyMonitoringSystem.Service\EnergyMonitoringSystem.Service.csproj", "{42C0DC26-48F1-4295-A60E-E8F1CCFF0B55}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnergyMonitoringSystem.Tests", "EnergyMonitoringSystem.Tests\EnergyMonitoringSystem.Tests.csproj", "{DB6ADFDE-9784-40B8-B473-64766FD16269}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,10 @@ Global
 		{42C0DC26-48F1-4295-A60E-E8F1CCFF0B55}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{42C0DC26-48F1-4295-A60E-E8F1CCFF0B55}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{42C0DC26-48F1-4295-A60E-E8F1CCFF0B55}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DB6ADFDE-9784-40B8-B473-64766FD16269}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DB6ADFDE-9784-40B8-B473-64766FD16269}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DB6ADFDE-9784-40B8-B473-64766FD16269}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DB6ADFDE-9784-40B8-B473-64766FD16269}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

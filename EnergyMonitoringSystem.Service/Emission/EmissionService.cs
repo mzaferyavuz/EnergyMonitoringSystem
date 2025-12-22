@@ -21,13 +21,38 @@ namespace EnergyMonitoringSystem.Service.Emission
 
             if (activeEnergyParam == null) return 0;
 
-            // 2. Tüketimi Topla
-            var totalKwh = await _context.MeterHistories
+            // TÜKETİM HESABI (DELTA: SON - İLK)
+            var historyQuery = _context.MeterHistories
                 .Where(h => h.MeterId == meterId
-                            && h.MeasurementParameterId == activeEnergyParam.Id // <--- DEĞİŞİKLİK BURADA
+                            && h.MeasurementParameterId == activeEnergyParam.Id
                             && h.Timestamp >= startDate
-                            && h.Timestamp <= endDate)
-                .SumAsync(h => h.Value);
+                            && h.Timestamp <= endDate);
+
+            var firstRecord = await historyQuery.OrderBy(h => h.Timestamp).FirstOrDefaultAsync();
+            var lastRecord = await historyQuery.OrderByDescending(h => h.Timestamp).FirstOrDefaultAsync();
+
+            double totalKwh = 0;
+
+            if (firstRecord != null && lastRecord != null)
+            {
+                if (lastRecord.Value >= firstRecord.Value)
+                {
+                    totalKwh = lastRecord.Value - firstRecord.Value;
+                }
+                else
+                {
+                    // Sayaç sıfırlanması durumu
+                    totalKwh = lastRecord.Value;
+                }
+            }
+
+            // 2. Tüketimi Topla
+            //var totalKwh = await _context.MeterHistories
+            //    .Where(h => h.MeterId == meterId
+            //                && h.MeasurementParameterId == activeEnergyParam.Id // <--- DEĞİŞİKLİK BURADA
+            //                && h.Timestamp >= startDate
+            //                && h.Timestamp <= endDate)
+            //    .SumAsync(h => h.Value);
 
             if (totalKwh == 0) return 0;
 

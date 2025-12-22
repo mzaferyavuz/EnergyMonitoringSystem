@@ -26,13 +26,48 @@ namespace EnergyMonitoringSystem.Service.Billing
 
             if (activeEnergyParam == null) return 0; // Sistemde enerji parametresi tanımlı değilse hesap yapamayız
 
-            // 2. Sadece Aktif Enerji verilerini topla
-            var totalConsumption = (decimal)await _context.MeterHistories
+            // İlgili tarih aralığındaki kayıtları tarih sırasına göre sorgula
+            var historyQuery = _context.MeterHistories
                 .Where(h => h.MeterId == meterId
-                            && h.MeasurementParameterId == activeEnergyParam.Id // <--- DEĞİŞİKLİK BURADA
+                            && h.MeasurementParameterId == activeEnergyParam.Id
                             && h.Timestamp >= startDate
-                            && h.Timestamp <= endDate)
-                .SumAsync(h => h.Value);
+                            && h.Timestamp <= endDate);
+
+            // İlk ve Son okumayı bul
+            // Not: FirstOrDefaultAsync kullanmak için önce OrderBy yapmalıyız.
+            // Performans notu: Veri çoksa bu sorguyu ikiye bölmek (Min ve Max Timestamp çekmek) daha hızlı olabilir.
+            var firstRecord = await historyQuery.OrderBy(h => h.Timestamp).FirstOrDefaultAsync();
+            var lastRecord = await historyQuery.OrderByDescending(h => h.Timestamp).FirstOrDefaultAsync();
+
+            decimal totalConsumption = 0;
+
+            if (firstRecord != null && lastRecord != null)
+            {
+                // Sayaç sıfırlanmadıysa (Rollover durumu yoksa) Son - İlk
+                if (lastRecord.Value >= firstRecord.Value)
+                {
+                    totalConsumption = (decimal)(lastRecord.Value - firstRecord.Value);
+                }
+                else
+                {
+                    // DİKKAT: Sayaç başa sarmış olabilir (Örn: 9999 -> 0005)
+                    // Basit bir yaklaşım olarak, eğer son değer ilk değerden küçükse;
+                    // bu aralıkta sayaç değişmiş veya sıfırlanmış demektir.
+                    // Şimdilik sadece son okunanı alabiliriz veya hata loglayabiliriz.
+                    // Profesyonel çözümde ardışık farkların toplamı (sum of deltas) alınır.
+                    // Basitlik adına şimdilik farkı alıyoruz (Negatif çıkmaması için kontrol):
+                    totalConsumption = (decimal)lastRecord.Value; // (Sıfırlandıysa o anki değer kadar tüketmiştir varsayımı)
+                }
+            }
+
+
+            // 2. Sadece Aktif Enerji verilerini topla
+            //var totalConsumption = (decimal)await _context.MeterHistories
+            //    .Where(h => h.MeterId == meterId
+            //                && h.MeasurementParameterId == activeEnergyParam.Id // <--- DEĞİŞİKLİK BURADA
+            //                && h.Timestamp >= startDate
+            //               && h.Timestamp <= endDate)
+            //    .SumAsync(h => h.Value);
 
             if (totalConsumption == 0) return 0;
 

@@ -1,14 +1,16 @@
-﻿using System;
+﻿using EnergyMonitoringSystem.Core.Helpers;
+using EnergyMonitoringSystem.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using NModbus;
+using System;
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using EnergyMonitoringSystem.Data;
 using Entities = EnergyMonitoringSystem.Core.Entities;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using NModbus;
 
 namespace EnergyMonitoringSystem.Service.BackgroundServices
 {
@@ -16,14 +18,17 @@ namespace EnergyMonitoringSystem.Service.BackgroundServices
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly TimeSpan _period = TimeSpan.FromMinutes(15);
+        private readonly ILogger<ModbusCollectorWorker> _logger; // Logger tanımlandı
 
-        public ModbusCollectorWorker(IServiceProvider serviceProvider)
+        public ModbusCollectorWorker(IServiceProvider serviceProvider, ILogger<ModbusCollectorWorker> logger)
         {
             _serviceProvider = serviceProvider;
+            _logger = logger;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            _logger.LogInformation("Modbus Veri Toplama Servisi başlatıldı.");
             while (!stoppingToken.IsCancellationRequested)
             {
                 await ReadAllDevicesAsync();
@@ -42,17 +47,30 @@ namespace EnergyMonitoringSystem.Service.BackgroundServices
 
                 foreach (var device in devices)
                 {
-                    try
+                    // RETRY LOGIC (Tekrar Deneme Mekanizması)
+                    // Cihaza bağlanamazsa 3 kereye kadar tekrar dener
+                    int retryCount = 0;
+                    bool success = false;
+                    while (retryCount < 3 && !success)
                     {
-                        await ReadDeviceData(device, dbContext);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Cihaz okuma hatası ({device.DeviceName}): {ex.Message}");
+                        try
+                        {
+                            await ReadDeviceData(device, dbContext);
+                            success = true; // Başarılı olursa döngüden çık
+                        }
+                        catch (Exception ex)
+                        {
+                            retryCount++;
+                            _logger.LogWarning(ex, "Cihaz okuma hatası ({DeviceName}). Deneme: {Count}/3", device.DeviceName, retryCount);
+                            // 2 saniye bekle tekrar dene
+                            if (retryCount < 3) await Task.Delay(2000);
+                            else _logger.LogError(ex, "Cihaz okuma BAŞARISIZ OLDU ({DeviceName}).", device.DeviceName);
+                        }
                     }
                 }
 
                 await dbContext.SaveChangesAsync();
+                _logger.LogInformation("Tüm cihaz okumaları tamamlandı ve kaydedildi.");
             }
         }
 
@@ -96,7 +114,7 @@ namespace EnergyMonitoringSystem.Service.BackgroundServices
                             ushort[] inputs = await master.ReadHoldingRegistersAsync(device.UnitId, (ushort)reg.RegisterAddress, pointsToRead);
 
                             // Byte Dönüşümü ve Hesaplama
-                            double rawValue = ConvertModbusData(inputs, reg.DataType, reg.ByteOrder);
+                            double rawValue = ModbusHelper.ConvertModbusData(inputs, reg.DataType, reg.ByteOrder);
                             double finalValue = rawValue * reg.ScaleFactor;
 
                             // Kayıt
@@ -129,7 +147,8 @@ namespace EnergyMonitoringSystem.Service.BackgroundServices
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Register okuma hatası (Meter: {meter.Name}, Reg: {reg.RegisterAddress}): {ex.Message}");
+                            // Register bazlı hatayı logla ama tüm cihazı durdurma
+                            _logger.LogError(ex, "Register Okuma Hatası! Meter: {MeterName}, Address: {Address}", meter.Name, reg.RegisterAddress);
                         }
                     }
                 }

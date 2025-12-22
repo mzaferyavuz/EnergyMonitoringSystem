@@ -67,16 +67,36 @@ namespace EnergyMonitoringSystem.Data
                 .HasIndex(h => h.Timestamp);
 
             // Rolleri Tanımlayalım (Madde 11)
-            string adminRoleId = Guid.NewGuid().ToString();
-            string standardRoleId = Guid.NewGuid().ToString();
-            string viewOnlyRoleId = Guid.NewGuid().ToString();
-            string externalRoleId = Guid.NewGuid().ToString();
+            //string adminRoleId = Guid.NewGuid().ToString();
+            //string standardRoleId = Guid.NewGuid().ToString();
+            //string viewOnlyRoleId = Guid.NewGuid().ToString();
+            //string externalRoleId = Guid.NewGuid().ToString();
 
             modelBuilder.Entity<IdentityRole>().HasData(
-new IdentityRole { Id = adminRoleId, Name = RoleConstants.Admin, NormalizedName = RoleConstants.Admin.ToUpper() },
-    new IdentityRole { Id = standardRoleId, Name = RoleConstants.Standard, NormalizedName = RoleConstants.Standard.ToUpper() },
-    new IdentityRole { Id = viewOnlyRoleId, Name = RoleConstants.ViewOnly, NormalizedName = RoleConstants.ViewOnly.ToUpper() },
-    new IdentityRole { Id = externalRoleId, Name = RoleConstants.External, NormalizedName = RoleConstants.External.ToUpper() }
+                new IdentityRole
+                {
+                    Id = "82e75004-5254-465e-b6b3-6c7081177656", // Sabit ID
+                    Name = RoleConstants.Admin,
+                    NormalizedName = RoleConstants.Admin.ToUpper()
+                },
+                new IdentityRole
+                {
+                    Id = "7d9b7113-a8f8-4035-99a7-a20dd404f6a3", // Sabit ID
+                    Name = RoleConstants.Standard,
+                    NormalizedName = RoleConstants.Standard.ToUpper()
+                },
+                 new IdentityRole
+                 {
+                     Id = "78a7570f-3ce5-48ba-9461-80283ed1d94d", // Sabit ID
+                     Name = RoleConstants.ViewOnly,
+                     NormalizedName = RoleConstants.ViewOnly.ToUpper()
+                 },
+                new IdentityRole
+                {
+                    Id = "1b95c86f-2361-4645-a75d-538d580f4215", // Sabit ID
+                    Name = RoleConstants.External,
+                    NormalizedName = RoleConstants.External.ToUpper()
+                }
             );
 
             modelBuilder.Entity<MeasurementParameter>().HasData(

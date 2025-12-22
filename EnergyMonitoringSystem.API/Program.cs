@@ -13,7 +13,17 @@ var builder = WebApplication.CreateBuilder(args);
 // 1. Veritabanı Bağlantısı
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlServer(connectionString, sqlOptions=>
+    {
+        // Bağlantı koparsa veya yavaşsa 5 kere daha dene, 30 saniye bekle
+        sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(30),
+            errorNumbersToAdd: null);
+
+        // Komut zaman aşımını uzat (60 saniye)
+        sqlOptions.CommandTimeout(60);
+    }));
 
 // 2. Identity Kurulumu (Kullanıcı Yönetimi)
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
@@ -87,9 +97,9 @@ builder.Services.AddSwaggerGen(c =>
             new List<string>()
         }
     });
-    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
-    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-    c.IncludeXmlComments(xmlPath);
+    //var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    //var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    //c.IncludeXmlComments(xmlPath);
 });
 
 // 7. CORS (Frontend Erişimi İçin)
@@ -102,11 +112,19 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // HTTP Request Pipeline
-if (app.Environment.IsDevelopment())
+//if (app.Environment.IsDevelopment())
+//{
+//    app.UseSwagger();
+//    app.UseSwaggerUI();
+//}
+
+//bu kisim gecici test icin eklendi
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Energy Monitoring API v1");
+    c.RoutePrefix = "swagger"; // Adresin http://localhost:xxxx/swagger olmasını sağlar
+});
 
 app.UseCors("AllowAll"); // CORS'u aktif et
 

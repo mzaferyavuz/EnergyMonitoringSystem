@@ -1,10 +1,14 @@
-﻿using EnergyMonitoringSystem.Core.Entities;
+﻿using EnergyMonitoringSystem.Core.Constants;
+using EnergyMonitoringSystem.Core.DTOs;
+using EnergyMonitoringSystem.Core.Entities;
+using EnergyMonitoringSystem.Core.Helpers;
 using EnergyMonitoringSystem.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using EnergyMonitoringSystem.Core.Constants;
+using NModbus;
+using System.Net.Sockets;
 
 namespace EnergyMonitoringSystem.API.Controllers
 {
@@ -44,5 +48,53 @@ namespace EnergyMonitoringSystem.API.Controllers
             var devices = await _context.ModbusDevices.ToListAsync();
             return Ok(devices);
         }
+
+
+        [HttpPost("test-live-read")]
+        [Authorize(Roles = RoleConstants.Admin)] // Sadece Admin test yapabilsin
+        public async Task<IActionResult> TestLiveRead([FromBody] ModbusTestRequestDto request)
+        {
+            try
+            {
+                using (TcpClient client = new TcpClient())
+                {
+                    // 1. Bağlantı Testi
+                    var connectTask = client.ConnectAsync(request.IpAddress, request.Port);
+                    if (await Task.WhenAny(connectTask, Task.Delay(3000)) != connectTask)
+                    {
+                        return BadRequest("Cihaza bağlanılamadı (Timeout - 3sn). IP ve Port'u kontrol edin.");
+                    }
+
+                    // 2. Modbus Master Oluştur
+                    var factory = new ModbusFactory();
+                    IModbusMaster master = factory.CreateMaster(client);
+                    master.Transport.ReadTimeout = 2000; // Okuma zaman aşımı
+
+                    // 3. Okunacak Boyut
+                    ushort pointsToRead = 1;
+                    if (request.DataType == "Float" || request.DataType == "Int32") pointsToRead = 2;
+
+                    // 4. Canlı Okuma
+                    ushort[] inputs = await master.ReadHoldingRegistersAsync(request.SlaveId, request.RegisterAddress, pointsToRead);
+
+                    // 5. Dönüştürme (Helper kullanıyoruz)
+                    double rawValue = ModbusHelper.ConvertModbusData(inputs, request.DataType, request.ByteOrder);
+                    double finalValue = rawValue * request.ScaleFactor;
+
+                    return Ok(new
+                    {
+                        Success = true,
+                        RawInputs = inputs, // Gelen ham ushort değerleri (Debug için)
+                        CalculatedValue = finalValue,
+                        Message = "Okuma Başarılı"
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Success = false, Error = ex.Message });
+            }
+        }
+
     }
 }
