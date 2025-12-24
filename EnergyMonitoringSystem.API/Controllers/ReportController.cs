@@ -53,6 +53,27 @@ namespace EnergyMonitoringSystem.API.Controllers
             return Ok(new { latest.Timestamp, latest.Value });
         }
 
+        [HttpGet("latest-all-parameters/{meterId}")]
+        public async Task<IActionResult> GetLatestAllParameters(int meterId)
+        {
+            // Sayaca ait tüm parametrelerin en son kayıtlarını getir
+            var latestValues = await _context.MeterHistories
+                .Where(h => h.MeterId == meterId)
+                .Include(h => h.MeasurementParameter)
+                .GroupBy(h => h.MeasurementParameterId) // Parametre bazlı grupla
+                .Select(g => g.OrderByDescending(x => x.Timestamp).FirstOrDefault()) // Her grubun en yenisini al
+                .Select(h => new
+                {
+                    ParameterName = h.MeasurementParameter.Name,
+                    Unit = h.MeasurementParameter.Unit,
+                    Value = h.Value,
+                    LastRead = h.Timestamp
+                })
+                .ToListAsync();
+
+            return Ok(latestValues);
+        }
+
         // 3. Fatura Hesaplama
         [HttpGet("bill")]
         public async Task<IActionResult> GetBill(int meterId, DateTime start, DateTime end)
@@ -67,6 +88,47 @@ namespace EnergyMonitoringSystem.API.Controllers
                 return BadRequest(ex.Message);
             }
         }
+
+        /// <summary>
+        /// Belirtilen kiracı için detaylı fatura raporu oluşturur.
+        /// Ana sayaç/Alt sayaç mantığını ve tarih aralığını dikkate alır.
+        /// </summary>
+        /// <param name="tenantId">Kiracı ID</param>
+        /// <param name="startDate">Başlangıç Tarihi (Örn: 2025-12-01)</param>
+        /// <param name="endDate">Bitiş Tarihi (Örn: 2025-12-31)</param>
+        /// <returns>TenantBillDto</returns>
+        [HttpGet("tenant-bill-report")]
+        public async Task<IActionResult> GetBillReport(
+            [FromQuery] int tenantId,
+            [FromQuery] DateTime startDate,
+            [FromQuery] DateTime endDate)
+        {
+            // 1. Basit Validasyonlar
+            if (tenantId <= 0)
+            {
+                return BadRequest("Geçerli bir Kiracı ID (TenantId) girilmelidir.");
+            }
+
+            if (startDate > endDate)
+            {
+                return BadRequest("Başlangıç tarihi bitiş tarihinden büyük olamaz.");
+            }
+
+            try
+            {
+                // 2. Servise Git ve Hesaplanmış Raporu Al
+                var billReport = await _billingService.CalculateTenantBill(tenantId, startDate, endDate);
+
+                // 3. Sonucu Dön (JSON formatında)
+                return Ok(billReport);
+            }
+            catch (Exception ex)
+            {
+                // Servis içinde "Kiracı bulunamadı" veya "Parametre yok" gibi hatalar fırlatılırsa burada yakalıyoruz.
+                return BadRequest(new { ErrorMessage = ex.Message });
+            }
+        }
+
 
         // 4. Karbon Emisyonu Hesaplama
         [HttpGet("emission")]

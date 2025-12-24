@@ -1,6 +1,7 @@
-﻿using EnergyMonitoringSystem.Data;
+﻿using EnergyMonitoringSystem.Core.Entities; // ApplicationUser için gerekli
+using EnergyMonitoringSystem.Data;
 using EnergyMonitoringSystem.Service.Auth;
-using EnergyMonitoringSystem.Core.Entities; // ApplicationUser için gerekli
+using EnergyMonitoringSystem.Service.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 // 1. Veritabanı Bağlantısı
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(connectionString, sqlOptions=>
+    options.UseSqlServer(connectionString, sqlOptions =>
     {
         // Bağlantı koparsa veya yavaşsa 5 kere daha dene, 30 saniye bekle
         sqlOptions.EnableRetryOnFailure(
@@ -53,6 +54,8 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 // builder.Services.AddScoped<BillingService>();
 builder.Services.AddScoped<EnergyMonitoringSystem.Service.Emission.EmissionService>();
 builder.Services.AddScoped<EnergyMonitoringSystem.Service.Billing.BillingService>();
+
+builder.Services.AddScoped<DashboardService>();
 
 // 5. Arka Plan Servisi (Worker)
 // ModbusCollectorWorker servisini kaydet

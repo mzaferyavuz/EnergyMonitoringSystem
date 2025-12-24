@@ -28,5 +28,6 @@ namespace EnergyMonitoringSystem.Core.Entities
         public string ByteOrder { get; set; } = "BigEndian";
 
         public double ScaleFactor { get; set; } = 1.0;
+
     }
 }

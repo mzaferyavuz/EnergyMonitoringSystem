@@ -28,5 +28,7 @@ namespace EnergyMonitoringSystem.Core.Entities
 
         public int? ModbusDeviceId { get; set; } // Sanal sayaç ise null olur
         public virtual ModbusDevice ModbusDevice { get; set; }
+
+        public virtual ICollection<ModbusRegister> ModbusRegisters { get; set; } = new List<ModbusRegister>();
     }
 }

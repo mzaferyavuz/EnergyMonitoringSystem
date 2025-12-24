@@ -33,7 +33,7 @@ namespace EnergyMonitoringSystem.Data
 
             modelBuilder.Entity<ModbusRegister>()
                 .HasOne(r => r.Meter)
-                .WithMany() // Bir sayacın birçok register'ı olabilir (isterseniz Meter entity'sine ICollection<ModbusRegister> ekleyebilirsiniz)
+                .WithMany(m => m.ModbusRegisters) // Bir sayacın birçok register'ı olabilir (isterseniz Meter entity'sine ICollection<ModbusRegister> ekleyebilirsiniz)
                 .HasForeignKey(r => r.MeterId)
                 .OnDelete(DeleteBehavior.Cascade); // Sayaç silinirse registerları da silinsin
 

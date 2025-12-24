@@ -11,8 +11,4 @@
     <PackageReference Include="Microsoft.Extensions.Identity.Stores" Version="9.0.11" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Enums\" />
-  </ItemGroup>
-
 </Project>
