@@ -56,20 +56,35 @@ namespace EnergyMonitoringSystem.API.Controllers
         [HttpGet("latest-all-parameters/{meterId}")]
         public async Task<IActionResult> GetLatestAllParameters(int meterId)
         {
+            // 1. Önce Sayacın varlığını kontrol et (Production önlemi)
+            bool meterExists = await _context.Meters.AnyAsync(m => m.Id == meterId);
+            if (!meterExists)
+            {
+                return NotFound("Belirtilen ID ile bir sayaç bulunamadı.");
+            }
             // Sayaca ait tüm parametrelerin en son kayıtlarını getir
-            var latestValues = await _context.MeterHistories
-                .Where(h => h.MeterId == meterId)
-                .Include(h => h.MeasurementParameter)
-                .GroupBy(h => h.MeasurementParameterId) // Parametre bazlı grupla
-                .Select(g => g.OrderByDescending(x => x.Timestamp).FirstOrDefault()) // Her grubun en yenisini al
-                .Select(h => new
-                {
-                    ParameterName = h.MeasurementParameter.Name,
-                    Unit = h.MeasurementParameter.Unit,
-                    Value = h.Value,
-                    LastRead = h.Timestamp
-                })
-                .ToListAsync();
+            var latestValues = await _context.ModbusRegisters
+                    .Where(r => r.MeterId == meterId)
+                    .Select(r => new
+                    {
+                        ParameterName = r.MeasurementParameter.Name,
+                        Unit = r.MeasurementParameter.Unit,
+                        // Alt sorgu (Subquery) ile en son değeri çekiyoruz. EF Core bunu çok iyi optimize eder.
+                        LatestData = _context.MeterHistories
+                            .Where(h => h.MeterId == meterId && h.MeasurementParameterId == r.MeasurementParameterId)
+                            .OrderByDescending(h => h.Timestamp)
+                            .Select(h => new { h.Value, h.Timestamp })
+                            .FirstOrDefault()
+                    })
+                    .ToListAsync();
+
+            var result = latestValues.Select(x => new
+            {
+                x.ParameterName,
+                x.Unit,
+                Value = x.LatestData != null ? x.LatestData.Value : 0,
+                LastRead = x.LatestData != null ? x.LatestData.Timestamp : (DateTime?)null
+            });
 
             return Ok(latestValues);
         }

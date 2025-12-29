@@ -19,144 +19,151 @@ namespace EnergyMonitoringSystem.Service.Services
         {
             var response = new DashboardResponseDto();
 
-            // 1. SAYAÇLARI BELİRLE (Scope ve Hiyerarşi Mantığı)
-            var meterQuery = _context.Meters
-                .Include(m => m.Purpose)
-                .Include(m => m.ParentMeter) // Hiyerarşi kontrolü için
-                .AsQueryable();
-
-            List<Meter> targetMeters = new List<Meter>();
-
-            // Tüm sayaçları çekip memory'de filtrelemek karmaşık hiyerarşi için bazen daha güvenlidir
-            // Ancak performans için DB seviyesinde filtrelemeye çalışalım:
-            var allMeters = await meterQuery.ToListAsync();
-
-            switch (request.Scope)
+            try
             {
-                case DashboardScope.All:
-                    // Herhangi bir parent'ı olmayanlar (En tepe kökler)
-                    targetMeters = allMeters.Where(m => m.ParentMeterId == null).ToList();
-                    break;
+                // 1. SAYAÇLARI BELİRLE (Kapsam ve Hiyerarşi)
+                var allMeters = await _context.Meters
+                    .Include(m => m.Purpose)
+                    .Include(m => m.ParentMeter)
+                    .AsNoTracking() // Sadece okuma yapıyoruz, performans artırır
+                    .ToListAsync();
 
-                case DashboardScope.NoTenant:
-                    // Tenant'ı olmayan VE Parent'ı olmayanlar
-                    targetMeters = allMeters.Where(m => m.TenantId == null && m.ParentMeterId == null).ToList();
-                    break;
+                List<int> targetMeterIds = new List<int>();
 
-                case DashboardScope.Tenant:
-                    if (request.TenantIds == null || !request.TenantIds.Any())
-                        throw new Exception("Tenant seçimi yapılmadı.");
-
-                    // Kural: Tenant seçildiyse, parent'ı başkasına ait olsa bile o tenant için en üst sayaçsa al.
-                    targetMeters = allMeters.Where(m =>
-                        m.TenantId.HasValue &&
-                        request.TenantIds.Contains(m.TenantId.Value) &&
-                        (m.ParentMeterId == null || // Parent yoksa zaten en üsttür
-                         (m.ParentMeter != null && !request.TenantIds.Contains(m.ParentMeter.TenantId ?? 0))) // Parent var ama bu Tenant'a ait değilse
-                    ).ToList();
-                    break;
-            }
-
-            var meterIds = targetMeters.Select(m => m.Id).ToList();
-
-            // 2. REFERANS VERİLERİ (Tarife ve Emisyon)
-            // Performans için aralıktaki tüm ilgili tarifeleri ve karbon faktörlerini çekiyoruz
-            var relevantTariffs = await _context.Tariffs
-                .Where(t => t.ValidFrom <= request.EndDate)
-                .ToListAsync();
-
-            var carbonFactors = await _context.CarbonFactors
-                .Where(c => c.ValidFrom <= request.EndDate)
-                .OrderByDescending(c => c.ValidFrom)
-                .ToListAsync();
-
-            // 3. ZAMAN DİLİMLERİNİ OLUŞTUR (Interval'e göre)
-            var timeBuckets = CreateTimeBuckets(request.StartDate, request.EndDate, request.Interval);
-            response.Labels = timeBuckets.Select(t => t.Label).ToList();
-
-            // 4. VERİLERİ ÇEK VE GRUPLA (UsagePurpose Bazlı)
-            // DB'den sadece ilgili tarih ve sayaçların verisini çekiyoruz
-            var historyData = await _context.MeterHistories
-                .Where(h => meterIds.Contains(h.MeterId) && h.Timestamp >= request.StartDate && h.Timestamp <= request.EndDate)
-                .Select(h => new { h.MeterId, h.Value, h.Timestamp }) // Sadece gereken alanlar
-                .ToListAsync();
-
-            // Sayaçları Kullanım Amacına Göre Grupla
-            var metersByPurpose = targetMeters
-                .GroupBy(m => m.Purpose?.Name ?? "Diğer") // Purpose yoksa "Diğer"
-                .ToList();
-
-            foreach (var purposeGroup in metersByPurpose)
-            {
-                var series = new DashboardSeriesDto { PurposeName = purposeGroup.Key };
-
-                // Her zaman dilimi için hesaplama
-                foreach (var bucket in timeBuckets)
+                switch (request.Scope)
                 {
-                    decimal bucketConsumption = 0;
-                    decimal bucketCost = 0;
-                    decimal bucketEmission = 0;
+                    case DashboardScope.All:
+                        // Parent'ı olmayan "Kök" sayaçlar (Ana panolar)
+                        targetMeterIds = allMeters.Where(m => m.ParentMeterId == null).Select(m => m.Id).ToList();
+                        break;
 
-                    // Bu bucket için geçerli Global Emisyon Faktörü
-                    var activeCarbon = carbonFactors.FirstOrDefault(c => c.ValidFrom <= bucket.Start)?.Factor ?? 0;
+                    case DashboardScope.NoTenant:
+                        // Tenant'ı olmayan ve Kök olanlar
+                        targetMeterIds = allMeters.Where(m => m.TenantId == null && m.ParentMeterId == null).Select(m => m.Id).ToList();
+                        break;
 
-                    // Bu gruptaki her sayaç için o aralıktaki değişimi bul
-                    foreach (var meter in purposeGroup)
-                    {
-                        // Memory'deki history listesinden o aralığa düşenleri bul
-                        var meterLogs = historyData
-                            .Where(h => h.MeterId == meter.Id && h.Timestamp >= bucket.Start && h.Timestamp < bucket.End)
-                            .OrderBy(h => h.Timestamp)
-                            .ToList();
+                    case DashboardScope.Tenant:
+                        if (request.TenantIds == null || !request.TenantIds.Any())
+                            throw new ArgumentException("Tenant seçimi yapılmadı.");
 
-                        if (meterLogs.Count > 1)
-                        {
-                            var firstVal = meterLogs.First().Value;
-                            var lastVal = meterLogs.Last().Value;
-
-                            // Tüketim (Rollover kontrolü basitçe eklendi)
-                            decimal consumption = (decimal)(lastVal >= firstVal ? lastVal - firstVal : lastVal);
-
-                            if (consumption > 0)
-                            {
-                                bucketConsumption += consumption;
-
-                                // --- MALİYET HESABI ---
-                                // Sayacın Tarifesini Bul (Tenant'a özel veya Genel)
-                                var activeTariff = relevantTariffs
-                                    .Where(t => (t.TenantId == meter.TenantId || (meter.TenantId == null && t.TenantId == null))
-                                                && t.ValidFrom <= bucket.Start)
-                                    .OrderByDescending(t => t.TenantId) // Önce Tenant'a özel, sonra genel
-                                    .ThenByDescending(t => t.ValidFrom) // En güncel tarihli
-                                    .FirstOrDefault();
-
-                                decimal price = activeTariff?.UnitPrice ?? 0;
-                                bucketCost += consumption * price;
-
-                                // --- EMİSYON HESABI ---
-                                bucketEmission += consumption * (decimal)activeCarbon;
-                            }
-                        }
-                    }
-
-                    // Series'e ekle
-                    series.ConsumptionData.Add(bucketConsumption);
-                    series.CostData.Add(bucketCost);
-                    series.EmissionData.Add(bucketEmission);
-
-                    // Genel Toplamlara Ekle
-                    response.TotalConsumption += bucketConsumption;
-                    response.TotalCost += bucketCost;
-                    response.TotalEmission += bucketEmission;
+                        // Seçilen Tenant'a ait olup, üstünde aynı tenant'a ait başka sayaç olmayanlar
+                        targetMeterIds = allMeters.Where(m =>
+                            m.TenantId.HasValue &&
+                            request.TenantIds.Contains(m.TenantId.Value) &&
+                            (m.ParentMeterId == null || // Kök sayaç
+                             (m.ParentMeter != null && !request.TenantIds.Contains(m.ParentMeter.TenantId ?? 0))) // Parent başka tenant'ınsa bu benim kökümdür
+                        ).Select(m => m.Id).ToList();
+                        break;
                 }
 
-                response.Series.Add(series);
+                if (!targetMeterIds.Any()) return response; // Sayaç yoksa boş dön
+
+                // 2. ZAMAN DİLİMLERİNİ OLUŞTUR (X Ekseni)
+                var timeBuckets = CreateTimeBuckets(request.StartDate, request.EndDate, request.Interval);
+                response.Labels = timeBuckets.Select(t => t.Label).ToList();
+
+                // 3. REFERANS VERİLERİ (Performans için önbelleğe al)
+                var tariffs = await _context.Tariffs.AsNoTracking().ToListAsync();
+                var carbonFactors = await _context.CarbonFactors.AsNoTracking().ToListAsync();
+
+                // 4. VERİLERİ ÇEK VE GRUPLA (Consumption Tablosundan)
+                // Hangi çözünürlüğü kullanacağımıza karar veriyoruz (Performans optimizasyonu)
+                // Eğer interval 15dk ise "15Min" verisini, saatlik veya üstü ise "Hourly" verisini kullanmak daha hızlıdır.
+                string resolution = request.Interval == DashboardInterval.FifteenMinutes ? "15Min" : "Hourly";
+
+                // Veritabanından sadece ilgili aralık ve sayaçların özet verisini çekiyoruz
+                var consumptionData = await _context.MeterConsumptions
+                    .Where(c => targetMeterIds.Contains(c.MeterId) &&
+                                c.PeriodType == resolution &&
+                                c.Timestamp >= request.StartDate &&
+                                c.Timestamp <= request.EndDate)
+                    .Select(c => new { c.MeterId, c.Timestamp, c.Consumption })
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                // Sayaçları Kullanım Amacına (UsagePurpose) göre grupla
+                var metersByPurpose = allMeters
+                    .Where(m => targetMeterIds.Contains(m.Id))
+                    .GroupBy(m => m.Purpose?.Name ?? "Diğer")
+                    .ToList();
+
+                // 5. HESAPLAMA DÖNGÜSÜ
+                foreach (var purposeGroup in metersByPurpose)
+                {
+                    var series = new DashboardSeriesDto { PurposeName = purposeGroup.Key };
+                    var purposeMeterIds = purposeGroup.Select(m => m.Id).ToList();
+
+                    foreach (var bucket in timeBuckets)
+                    {
+                        decimal bucketConsumption = 0;
+                        decimal bucketCost = 0;
+                        decimal bucketEmission = 0;
+
+                        // Bu zaman diliminin ortasındaki geçerli faktörleri bul
+                        var activeCarbon = carbonFactors
+                            .Where(c => c.ValidFrom <= bucket.End)
+                            .OrderByDescending(c => c.ValidFrom)
+                            .FirstOrDefault()?.Factor ?? 0.44; // Varsayılan faktör
+
+                        // Bu gruptaki sayaçların bu bucket içindeki verilerini topla
+                        // NOT: Veriler zaten hesaplı (Delta), sadece SUM yapıyoruz.
+                        var validConsumptions = consumptionData
+                            .Where(c => purposeMeterIds.Contains(c.MeterId) &&
+                                        c.Timestamp > bucket.Start &&  // Başlangıç hariç
+                                        c.Timestamp <= bucket.End)     // Bitiş dahil
+                            .ToList();
+
+                        if (validConsumptions.Any())
+                        {
+                            bucketConsumption = validConsumptions.Sum(c => c.Consumption);
+
+                            // Maliyet Hesabı (Sayaç bazlı tarife değişebileceği için döngüdeyiz)
+                            foreach (var item in validConsumptions)
+                            {
+                                // İlgili sayacı bul (Tarife tenantId kontrolü için)
+                                var meter = purposeGroup.FirstOrDefault(m => m.Id == item.MeterId);
+                                if (meter != null)
+                                {
+                                    var tariff = tariffs
+                                        .Where(t => (t.TenantId == meter.TenantId || t.TenantId == null) &&
+                                                    t.ValidFrom <= bucket.End)
+                                        .OrderByDescending(t => t.TenantId) // Önce Tenant'a özel
+                                        .ThenByDescending(t => t.ValidFrom)
+                                        .FirstOrDefault();
+
+                                    decimal price = tariff?.UnitPrice ?? 0;
+                                    bucketCost += item.Consumption * price;
+                                }
+                            }
+
+                            // Emisyon Hesabı (Consumption * Global Factor)
+                            bucketEmission = bucketConsumption * (decimal)activeCarbon;
+                        }
+
+                        // Seri Verilerine Ekle
+                        series.ConsumptionData.Add(Math.Round(bucketConsumption, 2));
+                        series.CostData.Add(Math.Round(bucketCost, 2));
+                        series.EmissionData.Add(Math.Round(bucketEmission, 2));
+
+                        // Genel Toplamlara Ekle
+                        response.TotalConsumption += bucketConsumption;
+                        response.TotalCost += bucketCost;
+                        response.TotalEmission += bucketEmission;
+                    }
+
+                    response.Series.Add(series);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Hata fırlatarak Controller'ın yakalamasını sağlıyoruz veya logluyoruz
+                throw new Exception($"Dashboard verisi oluşturulurken hata: {ex.Message}", ex);
             }
 
             return response;
         }
 
-        // Zaman dilimlerini oluşturan yardımcı metot
+        // Zaman dilimlerini oluşturan yardımcı metot (Aynı kalabilir, sadece ufak kontroller)
         private List<(DateTime Start, DateTime End, string Label)> CreateTimeBuckets(DateTime start, DateTime end, DashboardInterval interval)
         {
             var buckets = new List<(DateTime, DateTime, string)>();
@@ -187,7 +194,7 @@ namespace EnergyMonitoringSystem.Service.Services
                         break;
                     case DashboardInterval.Monthly:
                         next = current.AddMonths(1);
-                        label = current.ToString("MMMM yyyy");
+                        label = current.ToString("MMM yyyy");
                         break;
                     case DashboardInterval.Yearly:
                         next = current.AddYears(1);
@@ -199,13 +206,15 @@ namespace EnergyMonitoringSystem.Service.Services
                         break;
                 }
 
-                // Eğer son parça bitiş tarihini aşıyorsa, bitiş tarihine kadar al
-                if (next > end) next = end;
+                if (next > end) next = end; // Bitiş tarihini aşma
 
-                buckets.Add((current, next, label));
+                // Boş aralık oluşmaması için kontrol
+                if (current < next)
+                {
+                    buckets.Add((current, next, label));
+                }
                 current = next;
             }
-
             return buckets;
         }
     }

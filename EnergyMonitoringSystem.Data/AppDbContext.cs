@@ -27,6 +27,8 @@ namespace EnergyMonitoringSystem.Data
 
         public DbSet<MeasurementParameter> MeasurementParameters { get; set; }
 
+        public DbSet<MeterConsumption> MeterConsumptions { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -110,6 +112,13 @@ namespace EnergyMonitoringSystem.Data
             new MeasurementParameter { Id = 8, Name = "L2 Akimi", Key = "Current_L2", Unit = "A" },
             new MeasurementParameter { Id = 9, Name = "L3 Akimi", Key = "Current_L3", Unit = "A" }
             );
+
+            modelBuilder.Entity<MeterConsumption>()
+        .Property(p => p.Consumption)
+        .HasPrecision(18, 4);
+
+            modelBuilder.Entity<MeterConsumption>()
+        .HasIndex(x => new { x.MeterId, x.PeriodType, x.Timestamp });
         }
     }
 }
