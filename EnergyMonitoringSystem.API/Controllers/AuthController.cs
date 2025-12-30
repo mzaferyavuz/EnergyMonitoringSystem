@@ -28,13 +28,31 @@ namespace EnergyMonitoringSystem.API.Controllers
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
             var user = await _userManager.FindByNameAsync(loginDto.Username);
-            if (user != null && await _userManager.CheckPasswordAsync(user, loginDto.Password))
+
+            if (user == null) return Unauthorized("Kullanıcı bulunamadı.");
+
+            if (!await _userManager.CheckPasswordAsync(user, loginDto.Password))
+                return Unauthorized("Hatalı şifre.");
+
+            var userRoles = await _userManager.GetRolesAsync(user);
+            var role = userRoles.FirstOrDefault();
+
+            if (string.IsNullOrEmpty(role))
+                return Unauthorized("Kullanıcının rolü bulunamadı.");
+
+            var roles = new List<string> { role! };
+
+            var tokenResult =  _tokenService.CreateToken(user, roles);
+
+            return Ok(new LoginResponseDto
             {
-                var roles = await _userManager.GetRolesAsync(user);
-                var token = _tokenService.CreateToken(user, roles);
-                return Ok(new { Token = token });
-            }
-            return Unauthorized();
+                Token = tokenResult.Token,
+                Expiration = tokenResult.Expiration,
+                UserId = user.Id,
+                UserName = user.UserName, // Frontend'de "Merhaba user1" yazmak için
+                Email = user.Email,
+                Role = role
+            });
         }
 
         [HttpPost("register")]

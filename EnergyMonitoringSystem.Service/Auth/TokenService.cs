@@ -20,7 +20,7 @@ namespace EnergyMonitoringSystem.Service.Auth
             _config = config;
         }
 
-        public string CreateToken(ApplicationUser user, IList<string> roles)
+        public (string Token, DateTime Expiration) CreateToken(ApplicationUser user, IList<string> roles)
         {
             // Token içine gömülecek bilgiler (Claims)
             var claims = new List<Claim>
@@ -40,17 +40,19 @@ namespace EnergyMonitoringSystem.Service.Auth
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["TokenKey"]));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
 
+            var expirationDate = DateTime.Now.AddDays(7);
+
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.Now.AddDays(7), // 7 gün geçerli
+                Expires = expirationDate, // 7 gün geçerli
                 SigningCredentials = creds
             };
 
             var tokenHandler = new JwtSecurityTokenHandler();
             var token = tokenHandler.CreateToken(tokenDescriptor);
 
-            return tokenHandler.WriteToken(token);
+            return (tokenHandler.WriteToken(token), expirationDate);
         }
     }
 }

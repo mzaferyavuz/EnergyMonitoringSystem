@@ -9,6 +9,6 @@ namespace EnergyMonitoringSystem.Service.Auth
 {
     public interface ITokenService
     {
-        string CreateToken(ApplicationUser user, IList<string> roles);
+        (string Token, DateTime Expiration) CreateToken(ApplicationUser user, IList<string> roles);
     }
 }

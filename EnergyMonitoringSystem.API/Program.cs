@@ -48,6 +48,8 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<BillingService>();       // Namespace yukarı eklendiği için kısaldı
 builder.Services.AddScoped<EmissionService>();      // Namespace yukarı eklendiği için kısaldı
 builder.Services.AddScoped<DashboardService>();
+builder.Services.AddScoped<AnalysisService>();
+builder.Services.AddScoped<ConsumptionFlowService>();
 
 // 5. Arka Plan Servisi (Worker)
 builder.Services.AddHostedService<EnergyMonitoringSystem.Service.BackgroundServices.ModbusCollectorWorker>();
