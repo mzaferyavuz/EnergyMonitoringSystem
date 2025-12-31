@@ -151,7 +151,23 @@ namespace EnergyMonitoringSystem.Service.BackgroundServices
                 {
                     try
                     {
-                        ushort points = (ushort)(reg.DataType == "Float" || reg.DataType == "Int32" ? 2 : 1);
+                        ushort points = 1;
+
+                        switch (reg.DataType)
+                        {
+                            case "Double":  // 64-bit = 4 Register
+                            case "Int64":   // 64-bit = 4 Register
+                                points = 4;
+                                break;
+                            case "Float":   // 32-bit = 2 Register
+                            case "Int32":   // 32-bit = 2 Register
+                                points = 2;
+                                break;
+                            default:        // 16-bit (Int16, UInt16 vb.)
+                                points = 1;
+                                break;
+                        }
+
                         ushort[] inputs = await master.ReadHoldingRegistersAsync(deviceRecord.UnitId, (ushort)reg.RegisterAddress, points);
 
                         // SORU 2 ÇÖZÜMÜ: ModbusHelper kullanılıyor

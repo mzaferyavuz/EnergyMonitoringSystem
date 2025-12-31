@@ -72,7 +72,21 @@ namespace EnergyMonitoringSystem.API.Controllers
 
                     // 3. Okunacak Boyut
                     ushort pointsToRead = 1;
-                    if (request.DataType == "Float" || request.DataType == "Int32") pointsToRead = 2;
+                    // if (request.DataType == "Float" || request.DataType == "Int32") pointsToRead = 2;
+                    switch (request.DataType)
+                    {
+                        case "Double":  // 64-bit = 4 Register
+                        case "Int64":   // 64-bit = 4 Register
+                            pointsToRead = 4;
+                            break;
+                        case "Float":   // 32-bit = 2 Register
+                        case "Int32":   // 32-bit = 2 Register
+                            pointsToRead = 2;
+                            break;
+                        default:        // 16-bit (Int16, UInt16 vb.)
+                            pointsToRead = 1;
+                            break;
+                    }
 
                     // 4. Canlı Okuma
                     ushort[] inputs = await master.ReadHoldingRegistersAsync(request.SlaveId, request.RegisterAddress, pointsToRead);
