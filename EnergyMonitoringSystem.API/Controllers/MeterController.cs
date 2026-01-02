@@ -26,14 +26,17 @@ namespace EnergyMonitoringSystem.API.Controllers
         {
             var meters = await _context.Meters
                 .Include(m => m.ModbusDevice)
+                .Include(m => m.Purpose)
                 .Include(m => m.ParentMeter)
                 .Include(m => m.ModbusRegisters)
                 .Select(m => new MeterListDto
                 {
                     Id = m.Id,
                     Name = m.Name,
-                    DeviceName = m.ModbusDevice.DeviceName,
+                    DeviceName = m.ModbusDevice != null ? m.ModbusDevice.DeviceName : "-",
                     ParentName = m.ParentMeter != null ? m.ParentMeter.Name : "-",
+                    UsagePurpose = m.Purpose != null ? m.Purpose.Name : "-",
+                    IsVirtual = m.IsVirtual,
                     RegisterCount = m.ModbusRegisters.Count
                 })
                 .AsNoTracking()

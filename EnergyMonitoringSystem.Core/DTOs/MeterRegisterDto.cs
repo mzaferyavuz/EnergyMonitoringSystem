@@ -53,6 +53,9 @@ namespace EnergyMonitoringSystem.Core.DTOs
         public string Name { get; set; }
         public string DeviceName { get; set; }
         public string? ParentName { get; set; }
+
+        public string UsagePurpose { get; set; }
+        public bool IsVirtual { get; set; }
         public int RegisterCount { get; set; }
     }
 }

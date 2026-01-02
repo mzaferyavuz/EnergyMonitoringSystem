@@ -116,5 +116,49 @@ namespace EnergyMonitoringSystem.API.Controllers
 
             return BadRequest(result.Errors.Select(e => e.Description));
         }
+
+        // --- KULLANICI GÜNCELLEME (YENİ) ---
+        [HttpPut("{id}")]
+        public async Task<IActionResult> Update(string id, [FromBody] UpdateUserDto model)
+        {
+            var user = await _userManager.FindByIdAsync(id);
+            if (user == null) return NotFound("Kullanıcı bulunamadı.");
+
+            // 1. Temel Bilgileri Güncelle
+            user.UserName = model.UserName;
+            user.Email = model.Email;
+            user.TenantId = model.TenantId;
+
+            // 2. Şifre Güncelleme (Eğer dolu gönderildiyse)
+            if (!string.IsNullOrEmpty(model.Password))
+            {
+                // Mevcut şifre hash'ini silip yenisini oluşturuyoruz
+                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+                var resultPass = await _userManager.ResetPasswordAsync(user, token, model.Password);
+                if (!resultPass.Succeeded)
+                    return BadRequest(resultPass.Errors);
+            }
+
+            // 3. Kullanıcıyı Kaydet
+            var updateResult = await _userManager.UpdateAsync(user);
+            if (!updateResult.Succeeded) return BadRequest(updateResult.Errors);
+
+            // 4. Rol Güncelleme
+            // Mevcut rollerini al
+            var currentRoles = await _userManager.GetRolesAsync(user);
+            // Hepsini sil
+            await _userManager.RemoveFromRolesAsync(user, currentRoles);
+            // Yeni rolü ekle
+            if (!string.IsNullOrEmpty(model.Role))
+            {
+                // Rol var mı kontrol et
+                if (!await _roleManager.RoleExistsAsync(model.Role))
+                    return BadRequest("Belirtilen rol sistemde bulunamadı.");
+
+                await _userManager.AddToRoleAsync(user, model.Role);
+            }
+
+            return Ok(new { Message = "Kullanıcı başarıyla güncellendi." });
+        }
     }
 }
